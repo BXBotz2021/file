@@ -61,13 +61,15 @@ async def force_sub(bot, message):
                 except ChatAdminRequired:
                     channel_link = "❌ ᴄᴏᴜʟᴅɴ'ᴛ ᴄʀᴇᴀᴛᴇ ɪɴᴠɪᴛᴇ ʟɪɴᴋ"
             
-            buttons = [[
-                InlineKeyboardButton("🔔 ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ", url=channel_link)
-            ]]
+            buttons = [
+                [InlineKeyboardButton("🔔 ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ", url=channel_link)],
+                [InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", callback_data="check_sub")]
+            ]
             
             await message.reply_text(
-                text=f"**❗ᴘʟᴇᴀsᴇ ᴊᴏɪɴ @{channel_title} ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!**\n\n"
-                     "ᴅᴜᴇ ᴛᴏ ᴏᴠᴇʀʟᴏᴀᴅ, ᴏɴʟʏ ᴄʜᴀɴɴᴇʟ sᴜʙsᴄʀɪʙᴇʀs ᴄᴀɴ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!",
+                text=f"**❗ ᴀᴄᴄᴇss ᴅᴇɴɪᴇᴅ ❗**\n\n"
+                     f"ᴘʟᴇᴀsᴇ ᴊᴏɪɴ @{channel_title} ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!\n\n"
+                     "ᴀғᴛᴇʀ ᴊᴏɪɴɪɴɢ, ᴄʟɪᴄᴋ ᴏɴ '🔄 ᴛʀʏ ᴀɢᴀɪɴ' ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ.",
                 reply_markup=InlineKeyboardMarkup(buttons),
                 quote=True
             )
