@@ -30,7 +30,7 @@ Bot = Client(
     api_hash = os.environ.get("API_HASH")
 )
 
-ADMIN_IDS = [int(id) for id in os.environ.get("ADMIN_IDS", "6974737899, 7004919486").split(",") if id]
+ADMIN_IDS = [int(id) for id in os.environ.get("ADMIN_IDS", "7004919486").split(",") if id]
 
 START_TEXT = """👋 ʜᴇʏ  **{}**!
 ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛʜᴇ ʏᴏᴜᴛᴜʙᴇ ᴛʜᴜᴍʙɴᴀɪʟ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ ʙᴏᴛ 🚀
