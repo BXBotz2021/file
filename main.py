@@ -21,7 +21,7 @@ users_collection = db["users"]
 stats_collection = db["stats"]
 
 # Configuration
-START_IMAGE = os.environ.get("START_IMAGE", "https://graph.org/file/8d8cfd2c5c5c3c2c8e8c8.jpg")  # Default start image URL
+START_IMAGE = os.environ.get("START_IMAGE", "https://th.bing.com/th/id/OIP.wZ_jKiwpeVZ9cx9TYswrkwHaEo?rs=1&pid=ImgDetMain")  # Default start image URL
 
 Bot = Client(
     "YouTube-Thumbnail-Downloader",
