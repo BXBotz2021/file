@@ -9,3 +9,7 @@ pydub
 python-ffmpeg
 aiohttp
 pymongo
+docx2pdf
+pdf2image
+PyPDF2
+poppler-utils
