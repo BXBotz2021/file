@@ -171,7 +171,10 @@ async def get_stats_text():
     )
 
 @Bot.on_callback_query()
-async def cb_data(_, message):
+async def cb_data(bot, message):
+    if not await force_sub(bot, message):
+        return
+        
     data = message.data.lower()
     
     if data == "help":
@@ -243,11 +246,31 @@ async def cb_data(_, message):
         except Exception as e:
             await message.answer(f"❌ Error: {str(e)}")
 
-@Bot.on_message(filters.private & filters.command(["start", "help", "about"]))
+@Bot.on_message(filters.private & filters.command(["start", "help", "about", "stats", "fsub"]))
 async def start(bot, message):
+    command = message.command[0].lower()
+    
+    # Only process fsub command if user is admin
+    if command == "fsub":
+        await handle_force_sub_command(bot, message)
+        return
+        
+    # Only process stats command if user is admin
+    if command == "stats":
+        if message.from_user.id in ADMIN_IDS:
+            stats_text = await get_stats_text()
+            await message.reply_text(
+                stats_text,
+                quote=True,
+                reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS)
+            )
+        return
+
+    if not await force_sub(bot, message):
+        return
+
     await add_user(message.from_user.id, message.from_user.username)
     
-    command = message.command[0].lower()
     if command == "help":
         await message.reply_text(
             text=HELP_TEXT,
@@ -266,7 +289,7 @@ async def start(bot, message):
             reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS),
             quote=True
         )
-    else:
+    elif command == "start":
         await message.reply_photo(
             photo=START_IMAGE,
             caption=START_TEXT.format(message.from_user.mention),
@@ -274,38 +297,20 @@ async def start(bot, message):
             quote=True
         )
 
-@Bot.on_message(filters.private & filters.command("broadcast") & filters.user(ADMIN_IDS))
-async def broadcast(_, message):
-    if len(message.command) < 2:
-        await message.reply_text("❌ Please provide a message to broadcast.")
-        return
-    
-    broadcast_msg = message.text.split(None, 1)[1]
-    sent = 0
-    failed = 0
-    status_msg = await message.reply_text("📤 Broadcasting message...")
-    
-    users = users_collection.find({})
-    for user in users:
-        try:
-            await Bot.send_message(user["user_id"], broadcast_msg)
-            sent += 1
-            await status_msg.edit_text(f"🔄 Progress: {sent} sent, {failed} failed")
-            time.sleep(0.1)  # To prevent flooding
-        except FloodWait as e:
-            time.sleep(e.value)
-        except Exception:
-            failed += 1
-            continue
-    
-    await status_msg.edit_text(
-        f"✅ Broadcast completed!\n\n"
-        f"✓ Successfully sent: {sent}\n"
-        f"✗ Failed: {failed}"
-    )
-
 @Bot.on_message(filters.private & filters.text)
 async def send_thumbnail(bot, update):
+    # Check if the text is a YouTube link or video ID
+    text = update.text.strip()
+    if not (
+        "youtube.com" in text.lower() or 
+        "youtu.be" in text.lower() or 
+        (text.replace(" ", "").isalnum() and len(text) == 11)  # Video ID check
+    ):
+        return  # Ignore non-YouTube links/IDs
+        
+    if not await force_sub(bot, update):
+        return
+        
     message = await update.reply_text(
         text="🔄 `Analyzing...`",
         disable_web_page_preview=True,
@@ -337,24 +342,34 @@ async def send_thumbnail(bot, update):
             reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS)
         )
 
-# Add stats command handler
-@Bot.on_message(filters.private & filters.command("stats"))
-async def stats_command(_, message):
-    # Only allow admins to use this command
-    if message.from_user.id not in ADMIN_IDS:
-        await message.reply_text("⚠️ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ɪs ᴏɴʟʏ ғᴏʀ ᴀᴅᴍɪɴs.")
+@Bot.on_message(filters.private & filters.command("broadcast") & filters.user(ADMIN_IDS))
+async def broadcast(_, message):
+    if len(message.command) < 2:
+        await message.reply_text("❌ Please provide a message to broadcast.")
         return
     
-    stats_text = await get_stats_text()
-    await message.reply_text(
-        stats_text,
-        quote=True,
-        reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS)
+    broadcast_msg = message.text.split(None, 1)[1]
+    sent = 0
+    failed = 0
+    status_msg = await message.reply_text("📤 Broadcasting message...")
+    
+    users = users_collection.find({})
+    for user in users:
+        try:
+            await Bot.send_message(user["user_id"], broadcast_msg)
+            sent += 1
+            await status_msg.edit_text(f"🔄 Progress: {sent} sent, {failed} failed")
+            time.sleep(0.1)  # To prevent flooding
+        except FloodWait as e:
+            time.sleep(e.value)
+        except Exception:
+            failed += 1
+            continue
+    
+    await status_msg.edit_text(
+        f"✅ Broadcast completed!\n\n"
+        f"✓ Successfully sent: {sent}\n"
+        f"✗ Failed: {failed}"
     )
-
-# Add the force sub command handler
-@Bot.on_message(filters.private & filters.command("fsub"))
-async def fsub_command(bot, message):
-    await handle_force_sub_command(bot, message)
 
 Bot.run()
