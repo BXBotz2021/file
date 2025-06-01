@@ -9,7 +9,7 @@ from pyrogram.errors import FloodWait
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from handlers.image_handler import process_image, convert_image, compress_image
-from handlers.document_handler import process_document, convert_pdf_to_docx, convert_docx_to_pdf, convert_pdf_to_images, compress_pdf
+from handlers.document_handler import process_document, convert_pdf_to_docx, convert_docx_to_pdf, compress_pdf
 from handlers.audio_handler import process_audio, convert_audio, compress_audio, extract_audio
 from handlers.video_handler import process_video, convert_to_gif, convert_video, extract_frames, compress_video
 
@@ -50,7 +50,6 @@ I can help you convert various file formats:
 📄 **Documents:**
  • PDF → Word
  • Word → PDF
- • PDF → Images
  • PDF Compress
 
 🎵 **Audio:**
