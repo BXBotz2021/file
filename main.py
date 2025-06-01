@@ -6,9 +6,10 @@ import ytthumb
 from dotenv import load_dotenv
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
-from pyrogram.errors import FloodWait
+from pyrogram.errors import FloodWait, UserNotParticipant
 from pymongo import MongoClient
 import datetime
+from fsub import force_sub, handle_force_sub_command
 
 load_dotenv()
 
@@ -18,6 +19,9 @@ mongo_client = MongoClient(MONGO_URL)
 db = mongo_client["youtube_thumb_bot"]
 users_collection = db["users"]
 stats_collection = db["stats"]
+
+# Configuration
+START_IMAGE = os.environ.get("START_IMAGE", "https://graph.org/file/8d8cfd2c5c5c3c2c8e8c8.jpg")  # Default start image URL
 
 Bot = Client(
     "YouTube-Thumbnail-Downloader",
@@ -240,10 +244,10 @@ async def cb_data(_, message):
             await message.answer(f"❌ Error: {str(e)}")
 
 @Bot.on_message(filters.private & filters.command(["start", "help", "about"]))
-async def start(_, message):
-    command = message.command[0].lower()
+async def start(bot, message):
     await add_user(message.from_user.id, message.from_user.username)
     
+    command = message.command[0].lower()
     if command == "help":
         await message.reply_text(
             text=HELP_TEXT,
@@ -263,9 +267,9 @@ async def start(_, message):
             quote=True
         )
     else:
-        await message.reply_text(
-            text=START_TEXT.format(message.from_user.mention),
-            disable_web_page_preview=True,
+        await message.reply_photo(
+            photo=START_IMAGE,
+            caption=START_TEXT.format(message.from_user.mention),
             reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS),
             quote=True
         )
@@ -347,5 +351,10 @@ async def stats_command(_, message):
         quote=True,
         reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS)
     )
+
+# Add the force sub command handler
+@Bot.on_message(filters.private & filters.command("fsub"))
+async def fsub_command(bot, message):
+    await handle_force_sub_command(bot, message)
 
 Bot.run()
