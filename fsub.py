@@ -59,7 +59,7 @@ async def force_sub(bot, message):
                     invite_link = await bot.create_chat_invite_link(channel_id)
                     channel_link = invite_link.invite_link
                 except ChatAdminRequired:
-                    channel_link = "❌ ᴄᴏᴜʟᴅɴ'ᴛ ᴄʀᴇᴀᴛᴇ ɪɴᴠɪᴛᴇ ʟɪɴᴋ"
+                    channel_link = f"https://t.me/c/{str(channel_id).replace('-100', '')}"
             
             buttons = [
                 [InlineKeyboardButton("🔔 ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ", url=channel_link)],
@@ -68,7 +68,7 @@ async def force_sub(bot, message):
             
             await message.reply_text(
                 text=f"**❗ ᴀᴄᴄᴇss ᴅᴇɴɪᴇᴅ ❗**\n\n"
-                     f"ᴘʟᴇᴀsᴇ ᴊᴏɪɴ @{channel_title} ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!\n\n"
+                     f"ᴘʟᴇᴀsᴇ ᴊᴏɪɴ {channel_title} ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!\n\n"
                      "ᴀғᴛᴇʀ ᴊᴏɪɴɪɴɢ, ᴄʟɪᴄᴋ ᴏɴ '🔄 ᴛʀʏ ᴀɢᴀɪɴ' ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ.",
                 reply_markup=InlineKeyboardMarkup(buttons),
                 quote=True
@@ -125,9 +125,21 @@ async def handle_force_sub_command(bot, message):
             await message.reply_text("✅ ғᴏʀᴄᴇ sᴜʙ ʀᴇsᴇᴛ ᴛᴏ ᴅᴇғᴀᴜʟᴛ ᴄʜᴀɴɴᴇʟ!")
             return
 
+        # Handle channel ID format
+        if channel_input.startswith('-100'):
+            channel_id = channel_input
+        elif channel_input.startswith('@'):
+            channel_id = channel_input
+        else:
+            try:
+                # Try to convert to channel ID format
+                channel_id = f"-100{channel_input}" if channel_input.isdigit() else channel_input
+            except:
+                channel_id = channel_input
+
         # Verify the channel exists and bot has access
         try:
-            chat = await bot.get_chat(channel_input)
+            chat = await bot.get_chat(channel_id)
             # Try to get bot's member status in the channel
             bot_member = await bot.get_chat_member(chat.id, (await bot.get_me()).id)
             
@@ -150,6 +162,12 @@ async def handle_force_sub_command(bot, message):
             )
             
         except Exception as e:
-            await message.reply_text(f"❌ ᴇʀʀᴏʀ: {str(e)}\n\nᴘʟᴇᴀsᴇ ᴍᴀᴋᴇ sᴜʀᴇ:\n1. ᴛʜᴇ ʙᴏᴛ ɪs ɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ\n2. ʏᴏᴜ ᴘʀᴏᴠɪᴅᴇᴅ ᴀ ᴠᴀʟɪᴅ ᴄʜᴀɴɴᴇʟ ɪᴅ/ᴜsᴇʀɴᴀᴍᴇ")
+            await message.reply_text(
+                f"❌ ᴇʀʀᴏʀ: {str(e)}\n\n"
+                f"ᴘʟᴇᴀsᴇ ᴍᴀᴋᴇ sᴜʀᴇ:\n"
+                f"1. ᴛʜᴇ ʙᴏᴛ ɪs ɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ\n"
+                f"2. ʏᴏᴜ ᴘʀᴏᴠɪᴅᴇᴅ ᴀ ᴠᴀʟɪᴅ ᴄʜᴀɴɴᴇʟ ɪᴅ/ᴜsᴇʀɴᴀᴍᴇ\n"
+                f"3. ᴛʜᴇ ᴄʜᴀɴɴᴇʟ ɪs ɴᴏᴛ ᴘʀɪᴠᴀᴛᴇ ᴏʀ ʙᴏᴛ ʜᴀs ᴀᴄᴄᴇss"
+            )
     except Exception as e:
         await message.reply_text(f"❌ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ: {str(e)}")
