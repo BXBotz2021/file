@@ -30,6 +30,9 @@ Bot = Client(
     api_hash=os.environ.get("API_HASH")
 )
 
+# Initialize temp_files dictionary for storing temporary file paths
+Bot.temp_files = {}
+
 ADMIN_IDS = [int(id) for id in os.environ.get("ADMIN_IDS", "").split(",") if id]
 
 # Bot messages
