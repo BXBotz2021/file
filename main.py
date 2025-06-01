@@ -9,7 +9,7 @@ from pyrogram.errors import FloodWait
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from handlers.image_handler import process_image, convert_image, compress_image
-from handlers.document_handler import process_document, convert_pdf_to_docx, convert_docx_to_pdf, compress_pdf
+from handlers.document_handler import process_document, convert_pdf_to_docx, convert_docx_to_pdf, convert_pdf_to_images, compress_pdf
 from handlers.audio_handler import process_audio, convert_audio, compress_audio, extract_audio
 from handlers.video_handler import process_video, convert_to_gif, convert_video, extract_frames, compress_video
 
@@ -61,8 +61,9 @@ I can help you convert various file formats:
 🎬 **Video:**
  • MP4 → GIF
  • Video Compress
- • Extract Frames
- • Change Format
+ • Extract 10 Random Frames
+ • Extract Audio
+ • Supports videos up to 2GB
 
 Send me any file to get started!"""
 
@@ -83,11 +84,12 @@ HELP_TEXT = """🔍 **How to Use File Converter Bot:**
 • Images: Up to 5MB
 • Documents: Up to 20MB
 • Audio: Up to 20MB
-• Video: Up to 50MB
+• Video: Up to 2GB
 
 4️⃣ **Tips:**
 • For best quality, send files in original format
 • Some conversions may take time
+• For long videos, use the "10 Random Frames" option to extract sample frames
 • Premium users get higher limits
 
 ❓ Need help? Contact support using button below."""
@@ -327,7 +329,7 @@ async def media_handler(bot, message):
             "photo": 5242880,    # 5MB
             "document": 20971520, # 20MB
             "audio": 20971520,   # 20MB
-            "video": 52428800    # 50MB
+            "video": 2147483648  # 2GB
         }
 
         # Check file size limits
@@ -341,7 +343,7 @@ async def media_handler(bot, message):
             await message.reply_text("❌ Audio file size should be less than 20MB!")
             return
         elif message.video and file_size > LIMITS["video"]:
-            await message.reply_text("❌ Video file size should be less than 50MB!")
+            await message.reply_text("❌ Video file size should be less than 2GB!")
             return
 
         # Process different types of files
