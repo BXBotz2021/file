@@ -1,4 +1,5 @@
 import os
+import random
 import moviepy.editor as mp
 from PIL import Image
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -16,7 +17,7 @@ async def process_video(bot, message):
             ],
             [
                 InlineKeyboardButton("Extract Audio ➡️", callback_data="extract_audio"),
-                InlineKeyboardButton("Extract Frames ➡️", callback_data="extract_frames")
+                InlineKeyboardButton("10 Random Frames ➡️", callback_data="extract_frames")
             ],
             [
                 InlineKeyboardButton("🗜️ Compress", callback_data="compress_video")
@@ -68,7 +69,7 @@ async def convert_video(file_path, output_format="mp4"):
     except Exception as e:
         raise Exception(f"Error converting video: {str(e)}")
 
-async def extract_frames(file_path, frame_rate=1):
+async def extract_frames(file_path, num_frames=10):
     try:
         # Load video file
         video = mp.VideoFileClip(file_path)
@@ -77,14 +78,18 @@ async def extract_frames(file_path, frame_rate=1):
         output_dir = f"{os.path.splitext(file_path)[0]}_frames"
         os.makedirs(output_dir, exist_ok=True)
         
-        # Extract frames
+        # Get video duration in seconds
         duration = int(video.duration)
-        frame_paths = []
         
-        for i in range(0, duration, frame_rate):
-            frame = video.get_frame(i)
-            output_path = os.path.join(output_dir, f"frame_{i}.jpg")
-            Image.fromarray(frame).save(output_path)
+        # Generate random timestamps (in seconds)
+        timestamps = sorted(random.sample(range(duration), min(num_frames, duration)))
+        
+        frame_paths = []
+        for i, timestamp in enumerate(timestamps):
+            # Get frame at timestamp
+            frame = video.get_frame(timestamp)
+            output_path = os.path.join(output_dir, f"frame_{timestamp}s.jpg")
+            Image.fromarray(frame).save(output_path, quality=95)
             frame_paths.append(output_path)
             
         video.close()
