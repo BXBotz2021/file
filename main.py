@@ -236,10 +236,6 @@ async def callback_query(bot, callback_query):
                 elif data == "convert_docx":
                     output_path = await convert_pdf_to_docx(file_path)
                     await callback_query.message.reply_document(output_path)
-                elif data == "convert_images":
-                    image_paths = await convert_pdf_to_images(file_path)
-                    for img_path in image_paths:
-                        await callback_query.message.reply_document(img_path)
                 elif data == "compress_pdf":
                     output_path = await compress_pdf(file_path)
                     await callback_query.message.reply_document(output_path)
@@ -283,10 +279,6 @@ async def callback_query(bot, callback_query):
                     os.remove(file_path)
                 if 'output_path' in locals() and os.path.exists(output_path):
                     os.remove(output_path)
-                if 'image_paths' in locals():
-                    for path in image_paths:
-                        if os.path.exists(path):
-                            os.remove(path)
                 if 'frame_paths' in locals():
                     for path in frame_paths:
                         if os.path.exists(path):
