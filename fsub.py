@@ -13,11 +13,19 @@ mongo_client = MongoClient(MONGO_URL)
 db = mongo_client["youtube_thumb_bot"]
 settings_collection = db["settings"]
 
+# Default force sub channel (will be used if no channel is set)
+DEFAULT_FSUB_CHANNEL = "-1002693207322"  # Replace with your default channel ID
+
 async def get_force_sub_channel():
     settings = settings_collection.find_one({"type": "fsub"})
-    return settings.get("channel_id") if settings else None
+    # Return the stored channel ID if exists, otherwise return default channel
+    return settings.get("channel_id") if settings and settings.get("channel_id") else DEFAULT_FSUB_CHANNEL
 
 async def set_force_sub_channel(channel_id):
+    if channel_id is None:
+        # If disabling, set to default channel instead of None
+        channel_id = DEFAULT_FSUB_CHANNEL
+    
     settings_collection.update_one(
         {"type": "fsub"},
         {"$set": {"channel_id": channel_id}},
@@ -27,9 +35,6 @@ async def set_force_sub_channel(channel_id):
 async def force_sub(bot, message):
     try:
         channel_id = await get_force_sub_channel()
-        if not channel_id:  # If force sub is disabled
-            return True
-            
         try:
             # Try to get channel information
             chat = await bot.get_chat(channel_id)
@@ -70,6 +75,9 @@ async def force_sub(bot, message):
             
         except (UsernameNotOccupied, Exception) as e:
             print(f"Force Sub Error: {str(e)}")
+            # If there's an error with the current channel, switch to default
+            if channel_id != DEFAULT_FSUB_CHANNEL:
+                await set_force_sub_channel(DEFAULT_FSUB_CHANNEL)
             return True
             
     except Exception as e:
@@ -89,28 +97,30 @@ async def handle_force_sub_command(bot, message):
         # If no argument provided, show current channel
         if len(message.command) == 1:
             channel_id = await get_force_sub_channel()
-            if channel_id:
-                try:
-                    chat = await bot.get_chat(channel_id)
-                    await message.reply_text(
-                        f"🔒 ᴄᴜʀʀᴇɴᴛ ғᴏʀᴄᴇ sᴜʙ ᴄʜᴀɴɴᴇʟ:\n"
-                        f"• ID: `{channel_id}`\n"
-                        f"• Title: {chat.title}\n"
-                        f"• Username: @{chat.username if chat.username else 'Private Channel'}"
-                    )
-                except Exception as e:
-                    await message.reply_text(f"🔒 ᴄᴜʀʀᴇɴᴛ ғᴏʀᴄᴇ sᴜʙ ᴄʜᴀɴɴᴇʟ: `{channel_id}`\n\n❌ Error: {str(e)}")
-            else:
-                await message.reply_text("🔓 ɴᴏ ғᴏʀᴄᴇ sᴜʙ ᴄʜᴀɴɴᴇʟ sᴇᴛ!")
+            try:
+                chat = await bot.get_chat(channel_id)
+                await message.reply_text(
+                    f"🔒 ᴄᴜʀʀᴇɴᴛ ғᴏʀᴄᴇ sᴜʙ ᴄʜᴀɴɴᴇʟ:\n"
+                    f"• ID: `{channel_id}`\n"
+                    f"• Title: {chat.title}\n"
+                    f"• Username: @{chat.username if chat.username else 'Private Channel'}\n"
+                    f"• Status: {'Default Channel' if channel_id == DEFAULT_FSUB_CHANNEL else 'Custom Channel'}"
+                )
+            except Exception as e:
+                await message.reply_text(
+                    f"🔒 ᴄᴜʀʀᴇɴᴛ ғᴏʀᴄᴇ sᴜʙ ᴄʜᴀɴɴᴇʟ: `{channel_id}`\n"
+                    f"❌ Error: {str(e)}\n"
+                    f"Status: {'Default Channel' if channel_id == DEFAULT_FSUB_CHANNEL else 'Custom Channel'}"
+                )
             return
 
         # Get the channel ID/username from command
         channel_input = message.command[1]
         
-        # Handle channel removal
-        if channel_input.lower() in ['none', 'off', 'disable', 'remove']:
-            await set_force_sub_channel(None)
-            await message.reply_text("✅ ғᴏʀᴄᴇ sᴜʙ ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ!")
+        # Handle channel removal (will set to default instead of disabling)
+        if channel_input.lower() in ['none', 'off', 'disable', 'remove', 'default']:
+            await set_force_sub_channel(DEFAULT_FSUB_CHANNEL)
+            await message.reply_text("✅ ғᴏʀᴄᴇ sᴜʙ ʀᴇsᴇᴛ ᴛᴏ ᴅᴇғᴀᴜʟᴛ ᴄʜᴀɴɴᴇʟ!")
             return
 
         # Verify the channel exists and bot has access
@@ -133,7 +143,8 @@ async def handle_force_sub_command(bot, message):
                 f"✅ ғᴏʀᴄᴇ sᴜʙ ᴄʜᴀɴɴᴇʟ ᴜᴘᴅᴀᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!\n\n"
                 f"• Title: {chat.title}\n"
                 f"• Chat ID: `{chat.id}`\n"
-                f"• Username: @{chat.username if chat.username else 'Private Channel'}"
+                f"• Username: @{chat.username if chat.username else 'Private Channel'}\n"
+                f"• Status: Custom Channel"
             )
             
         except Exception as e:
