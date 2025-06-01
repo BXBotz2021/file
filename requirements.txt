@@ -1,6 +1,11 @@
-
 pyrogram
 tgcrypto
-ytthumb
 python-dotenv
-pymongo[srv]
+pillow
+pdf2docx
+moviepy
+pytube
+pydub
+python-ffmpeg
+aiohttp
+pymongo
