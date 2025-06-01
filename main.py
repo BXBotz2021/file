@@ -2,374 +2,254 @@
 
 import os
 import time
-import ytthumb
-from dotenv import load_dotenv
+from datetime import datetime
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
-from pyrogram.errors import FloodWait, UserNotParticipant
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pyrogram.errors import FloodWait
 from pymongo import MongoClient
-import datetime
-from fsub import force_sub, handle_force_sub_command
+from dotenv import load_dotenv
+from handlers.image_handler import process_image
+from handlers.document_handler import process_document
+from handlers.audio_handler import process_audio
+from handlers.video_handler import process_video
 
 load_dotenv()
 
 # MongoDB setup
-MONGO_URL = os.environ.get("MONGO_URL", "mongodb+srv://anushkabot:anushkabot@cluster0.rg84dqj.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+MONGO_URL = os.environ.get("MONGO_URL", "mongodb+srv://EVOKINDIA:evokindia@evokindia.0cap9.mongodb.net/?retryWrites=true&w=majority&appName=EvokIndia")
 mongo_client = MongoClient(MONGO_URL)
-db = mongo_client["youtube_thumb_bot"]
+db = mongo_client["file_converter_bot"]
 users_collection = db["users"]
 stats_collection = db["stats"]
 
-# Configuration
-START_IMAGE = os.environ.get("START_IMAGE", "https://th.bing.com/th/id/OIP.wZ_jKiwpeVZ9cx9TYswrkwHaEo?rs=1&pid=ImgDetMain")  # Default start image URL
-
+# Bot initialization
 Bot = Client(
-    "YouTube-Thumbnail-Downloader",
-    bot_token = os.environ.get("BOT_TOKEN"),
-    api_id = int(os.environ.get("API_ID")),
-    api_hash = os.environ.get("API_HASH")
+    "File-Converter-Bot",
+    bot_token=os.environ.get("BOT_TOKEN"),
+    api_id=int(os.environ.get("API_ID")),
+    api_hash=os.environ.get("API_HASH")
 )
 
-ADMIN_IDS = [int(id) for id in os.environ.get("ADMIN_IDS", "7004919486").split(",") if id]
+ADMIN_IDS = [int(id) for id in os.environ.get("ADMIN_IDS", "").split(",") if id]
 
-START_TEXT = """👋 ʜᴇʏ  **{}**!
-ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛʜᴇ ʏᴏᴜᴛᴜʙᴇ ᴛʜᴜᴍʙɴᴀɪʟ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ ʙᴏᴛ 🚀
+# Bot messages
+START_TEXT = """👋 Hello **{}**!
+Welcome to **File Converter Bot** 🔄
 
-🎯 ɪ'ᴍ ʏᴏᴜʀ ɢᴏ-ᴛᴏ ʙᴏᴛ ғᴏʀ ɢʀᴀʙʙɪɴɢ ʜɪɢʜ-ǫᴜᴀʟɪᴛʏ ᴛʜᴜᴍʙɴᴀɪʟs ɪɴ sᴇᴄᴏɴᴅs.
+I can help you convert various file formats:
 
-🔍 ᴡʜᴀᴛ ɪ ᴄᴀɴ ᴅᴏ:
-• ᴅᴏᴡɴʟᴏᴀᴅ ᴛʜᴜᴍʙɴᴀɪʟs ɪɴ sᴅ, ᴍǫ, ʜǫ, ᴍᴀxʀᴇs
-• ᴀᴄᴄᴇᴘᴛs ʏᴏᴜᴛᴜʙᴇ ʟɪɴᴋs ᴏʀ ᴠɪᴅᴇᴏ ɪᴅs
-• ǫᴜɪᴄᴋ, sɪᴍᴘʟᴇ, ɴᴏ ᴄᴀᴘ
+📸 **Images:**
+ • JPG ↔️ PNG
+ • Image → Sticker
+ • Image → PDF
+ • Resize/Compress Images
 
-🧠 ᴀᴠᴀɪʟᴀʙʟᴇ ǫᴜᴀʟɪᴛɪᴇs: sd, mq, hq, maxres
+📄 **Documents:**
+ • PDF → Word
+ • Word → PDF
+ • PDF → Images
+ • PDF Compress
 
-ᴛʏᴘᴇ /help ɪғ ʏᴏᴜ ɴᴇᴇᴅ ᴀ ʙᴏᴏsᴛ 💬
+🎵 **Audio:**
+ • MP3 ↔️ WAV
+ • OGG ↔️ MP3
+ • Audio Compress
+ • Extract Audio from Video
 
-ʟᴇᴛ'ꜱ ɢᴇᴛ ᴛʜᴏsᴇ ᴛʜᴜᴍʙɴᴀɪʟs 🔥"""
+🎬 **Video:**
+ • MP4 → GIF
+ • Video Compress
+ • Extract Frames
+ • Change Format
 
-HELP_TEXT = """🔍 **How to Use:**
+Send me any file to get started!"""
 
-1️⃣ **Simple Download:**
-   • Just send a YouTube video link or ID
-   • I'll send the thumbnail in standard quality
+HELP_TEXT = """🔍 **How to Use File Converter Bot:**
 
-2️⃣ **Quality Selection:**
-   • Format: `videoID | quality`
-   • Available qualities:
-     - sd (Standard)
-     - mq (Medium)
-     - hq (High)
-     - maxres (Maximum)
+1️⃣ **Converting Files:**
+• Simply send me any supported file
+• Select the desired output format
+• Wait for the conversion to complete
 
-3️⃣ **Examples:**
-   • `dQw4w9WgXcQ`
-   • `dQw4w9WgXcQ | hq`
-   • `https://youtube.com/watch?v=dQw4w9WgXcQ`
+2️⃣ **Supported Formats:**
+• Images: JPG, PNG, WEBP, STICKER
+• Documents: PDF, DOCX, TXT
+• Audio: MP3, WAV, OGG, M4A
+• Video: MP4, AVI, MKV, GIF
 
-❓ Need more help? Contact support using the button below."""
+3️⃣ **File Size Limits:**
+• Images: Up to 5MB
+• Documents: Up to 20MB
+• Audio: Up to 20MB
+• Video: Up to 50MB
 
-ABOUT_TEXT = """🤖 **Bot Information:**
+4️⃣ **Tips:**
+• For best quality, send files in original format
+• Some conversions may take time
+• Premium users get higher limits
 
-• **Name:** YouTube Thumbnail Downloader
-• **Version:** 2.0
-• **Developer:** @BOT_RESURGE
-• **Language:** Python
-• **Framework:** Pyrogram
+❓ Need help? Contact support using button below."""
 
-📊 **Statistics:**
-• Users: {}
-• Downloads: {}
-"""
-
-STATS_TEXT = """📊 **ʙᴏᴛ sᴛᴀᴛɪsᴛɪᴄs:**
-
-👥 ᴛᴏᴛᴀʟ ᴜsᴇʀs: {}
-📥 ᴛᴏᴛᴀʟ ᴅᴏᴡɴʟᴏᴀᴅs: {}
-🔄 ʟᴀsᴛ ᴜᴘᴅᴀᴛᴇᴅ: {} UTC
-
-📈 **ᴛᴏᴅᴀʏ's sᴛᴀᴛs:**
-• ɴᴇᴡ ᴜsᴇʀs: {}
-• ᴅᴏᴡɴʟᴏᴀᴅs: {}"""
-
-# Enhanced buttons with emojis
-MAIN_BUTTONS = [
+# Keyboard markups
+START_BUTTONS = [
     [
-        InlineKeyboardButton("❓ ʜᴇʟᴘ", callback_data="help"),
-        InlineKeyboardButton("ℹ️ ᴀʙᴏᴜᴛ", callback_data="about")
+        InlineKeyboardButton("❓ Help", callback_data="help"),
+        InlineKeyboardButton("📊 Stats", callback_data="stats")
     ],
-    [
-        InlineKeyboardButton("📊 sᴛᴀᴛs", callback_data="stats"),
-        InlineKeyboardButton("👨‍💻 ᴅᴇᴠᴇʟᴏᴘᴇʀ", url='https://telegram.me/bot_resurge')
-    ]
+    [InlineKeyboardButton("👨‍💻 Developer", url="https://t.me/bot_resurge")]
 ]
 
-photo_buttons = InlineKeyboardMarkup([
-    [InlineKeyboardButton('🎨 ᴏᴛʜᴇʀ ǫᴜᴀʟɪᴛɪᴇs', callback_data='qualities')],
-    [InlineKeyboardButton("👨‍💻 ᴅᴇᴠᴇʟᴏᴘᴇʀ", url='https://telegram.me/bot_resurge')]
-])
-
-# User tracking function
+# Function to add new user
 async def add_user(user_id, username):
     if not users_collection.find_one({"user_id": user_id}):
         users_collection.insert_one({
             "user_id": user_id,
             "username": username,
-            "joined_date": time.time()
+            "joined_date": datetime.now(),
+            "files_converted": 0
         })
 
-# Update stats
-def update_stats(type="downloads"):
-    # Update total downloads
+# Function to update stats
+def update_stats(conversion_type):
     stats_collection.update_one(
-        {"type": type},
-        {"$inc": {"count": 1}},
-        upsert=True
-    )
-    
-    # Update daily downloads
-    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
-    stats_collection.update_one(
-        {
-            "type": "daily_downloads",
-            "date": today
-        },
+        {"type": conversion_type},
         {"$inc": {"count": 1}},
         upsert=True
     )
 
-def get_daily_stats():
-    today = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # Get today's new users
-    new_users = users_collection.count_documents({
-        "joined_date": {"$gte": today.timestamp()}
-    })
-    
-    # Get today's downloads
-    daily_downloads = stats_collection.find_one({
-        "type": "daily_downloads",
-        "date": today.strftime("%Y-%m-%d")
-    })
-    
-    return new_users, daily_downloads["count"] if daily_downloads else 0
-
-async def get_stats_text():
-    total_users = users_collection.count_documents({})
-    total_downloads = stats_collection.find_one({"type": "downloads"})
-    downloads = total_downloads["count"] if total_downloads else 0
-    current_time = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    
-    daily_users, daily_downloads = get_daily_stats()
-    
-    return STATS_TEXT.format(
-        total_users,
-        downloads,
-        current_time,
-        daily_users,
-        daily_downloads
-    )
-
-@Bot.on_callback_query()
-async def cb_data(bot, message):
-    if not await force_sub(bot, message):
-        return
-        
-    data = message.data.lower()
-    
-    if data == "help":
-        await message.edit_message_text(
-            HELP_TEXT,
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("◀️ ʙᴀᴄᴋ", callback_data="start")
-            ]])
-        )
-    
-    elif data == "stats":
-        stats_text = await get_stats_text()
-        await message.edit_message_text(
-            stats_text,
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("◀️ ʙᴀᴄᴋ", callback_data="start")
-            ]])
-        )
-    
-    elif data == "about":
-        total_users = users_collection.count_documents({})
-        total_downloads = stats_collection.find_one({"type": "downloads"})
-        downloads = total_downloads["count"] if total_downloads else 0
-        
-        await message.edit_message_text(
-            ABOUT_TEXT.format(total_users, downloads),
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("◀️ ʙᴀᴄᴋ", callback_data="start")
-            ]])
-        )
-    
-    elif data == "start":
-        await message.edit_message_text(
-            START_TEXT.format(message.from_user.mention),
-            reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS)
-        )
-    
-    elif data == "qualities":
-        buttons = []
-        for quality in ytthumb.qualities():
-            buttons.append(
-                InlineKeyboardButton(
-                    text=ytthumb.qualities()[quality].upper().replace("QUALITY", "ǫᴜᴀʟɪᴛʏ").replace("STANDARD", "sᴛᴀɴᴅᴀʀᴅ").replace("MEDIUM", "ᴍᴇᴅɪᴜᴍ").replace("HIGH", "ʜɪɢʜ").replace("MAXIMUM RESOLUTION", "ᴍᴀxɪᴍᴜᴍ ʀᴇsᴏʟᴜᴛɪᴏɴ"),
-                    callback_data=quality
-                )
-            )
-        await message.edit_message_reply_markup(
-            InlineKeyboardMarkup([
-                [buttons[0], buttons[1]],
-                [buttons[2], buttons[3]],
-                [InlineKeyboardButton("◀️ ʙᴀᴄᴋ", callback_data="back")]
-            ])
-        )
-    
-    elif data == "back":
-        await message.edit_message_reply_markup(photo_buttons)
-    
-    elif data in ytthumb.qualities():
-        try:
-            thumbnail = ytthumb.thumbnail(
-                video=message.message.reply_to_message.text,
-                quality=message.data
-            )
-            await message.edit_message_media(
-                media=InputMediaPhoto(media=thumbnail),
-                reply_markup=photo_buttons
-            )
-            update_stats("downloads")
-        except Exception as e:
-            await message.answer(f"❌ Error: {str(e)}")
-
-@Bot.on_message(filters.private & filters.command(["start", "help", "about", "stats", "fsub"]))
-async def start(bot, message):
-    command = message.command[0].lower()
-    
-    # Only process fsub command if user is admin
-    if command == "fsub":
-        await handle_force_sub_command(bot, message)
-        return
-        
-    # Only process stats command if user is admin
-    if command == "stats":
-        if message.from_user.id in ADMIN_IDS:
-            stats_text = await get_stats_text()
-            await message.reply_text(
-                stats_text,
-                quote=True,
-                reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS)
-            )
-        return
-
-    if not await force_sub(bot, message):
-        return
-
+# Command handlers
+@Bot.on_message(filters.command(["start", "help"]))
+async def start_command(bot, message):
     await add_user(message.from_user.id, message.from_user.username)
     
-    if command == "help":
+    if message.command[0].lower() == "help":
         await message.reply_text(
-            text=HELP_TEXT,
-            disable_web_page_preview=True,
-            reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS),
+            HELP_TEXT,
+            reply_markup=InlineKeyboardMarkup(START_BUTTONS),
             quote=True
         )
-    elif command == "about":
-        total_users = users_collection.count_documents({})
-        total_downloads = stats_collection.find_one({"type": "downloads"})
-        downloads = total_downloads["count"] if total_downloads else 0
-        
+    else:
         await message.reply_text(
-            text=ABOUT_TEXT.format(total_users, downloads),
-            disable_web_page_preview=True,
-            reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS),
-            quote=True
-        )
-    elif command == "start":
-        await message.reply_photo(
-            photo=START_IMAGE,
-            caption=START_TEXT.format(message.from_user.mention),
-            reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS),
+            START_TEXT.format(message.from_user.mention),
+            reply_markup=InlineKeyboardMarkup(START_BUTTONS),
             quote=True
         )
 
-@Bot.on_message(filters.private & filters.text)
-async def send_thumbnail(bot, update):
-    # Check if the text is a YouTube link or video ID
-    text = update.text.strip()
-    if not (
-        "youtube.com" in text.lower() or 
-        "youtu.be" in text.lower() or 
-        (text.replace(" ", "").isalnum() and len(text) == 11)  # Video ID check
-    ):
-        return  # Ignore non-YouTube links/IDs
-        
-    if not await force_sub(bot, update):
-        return
-        
-    message = await update.reply_text(
-        text="🔄 `Analyzing...`",
-        disable_web_page_preview=True,
-        quote=True
+# Stats command
+@Bot.on_message(filters.command("stats") & filters.user(ADMIN_IDS))
+async def stats_command(bot, message):
+    total_users = users_collection.count_documents({})
+    total_conversions = sum(
+        stat["count"] for stat in stats_collection.find()
     )
-    try:
-        if " | " in update.text:
-            video = update.text.split(" | ", -1)[0]
-            quality = update.text.split(" | ", -1)[1]
+    
+    stats_text = f"""📊 **Bot Statistics**
+
+👥 Total Users: {total_users}
+🔄 Total Conversions: {total_conversions}
+
+**Conversion Types:**"""
+    
+    for stat in stats_collection.find():
+        stats_text += f"\n• {stat['type']}: {stat['count']}"
+    
+    await message.reply_text(stats_text)
+
+# Callback query handler
+@Bot.on_callback_query()
+async def callback_query(bot, callback_query):
+    data = callback_query.data
+    
+    if data == "help":
+        await callback_query.message.edit_text(
+            HELP_TEXT,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("◀️ Back", callback_data="start")]
+            ])
+        )
+    elif data == "start":
+        await callback_query.message.edit_text(
+            START_TEXT.format(callback_query.from_user.mention),
+            reply_markup=InlineKeyboardMarkup(START_BUTTONS)
+        )
+    elif data == "stats":
+        if callback_query.from_user.id in ADMIN_IDS:
+            total_users = users_collection.count_documents({})
+            total_conversions = sum(
+                stat["count"] for stat in stats_collection.find()
+            )
+            
+            stats_text = f"""📊 **Bot Statistics**
+
+👥 Total Users: {total_users}
+🔄 Total Conversions: {total_conversions}
+
+**Conversion Types:**"""
+            
+            for stat in stats_collection.find():
+                stats_text += f"\n• {stat['type']}: {stat['count']}"
+            
+            await callback_query.message.edit_text(
+                stats_text,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("◀️ Back", callback_data="start")]
+                ])
+            )
         else:
-            video = update.text
-            quality = "sd"
-        
-        thumbnail = ytthumb.thumbnail(
-            video=video,
-            quality=quality
-        )
-        await update.reply_photo(
-            photo=thumbnail,
-            reply_markup=photo_buttons,
-            quote=True
-        )
-        update_stats("downloads")
-        await message.delete()
-    except Exception as error:
-        await message.edit_text(
-            text=f"❌ Error: {str(error)}",
-            disable_web_page_preview=True,
-            reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS)
-        )
+            await callback_query.answer("⚠️ Only admins can view statistics!", show_alert=True)
 
-@Bot.on_message(filters.private & filters.command("broadcast") & filters.user(ADMIN_IDS))
-async def broadcast(_, message):
-    if len(message.command) < 2:
-        await message.reply_text("❌ Please provide a message to broadcast.")
-        return
-    
-    broadcast_msg = message.text.split(None, 1)[1]
-    sent = 0
-    failed = 0
-    status_msg = await message.reply_text("📤 Broadcasting message...")
-    
-    users = users_collection.find({})
-    for user in users:
-        try:
-            await Bot.send_message(user["user_id"], broadcast_msg)
-            sent += 1
-            await status_msg.edit_text(f"🔄 Progress: {sent} sent, {failed} failed")
-            time.sleep(0.1)  # To prevent flooding
-        except FloodWait as e:
-            time.sleep(e.value)
-        except Exception:
-            failed += 1
-            continue
-    
-    await status_msg.edit_text(
-        f"✅ Broadcast completed!\n\n"
-        f"✓ Successfully sent: {sent}\n"
-        f"✗ Failed: {failed}"
-    )
+# File handlers
+@Bot.on_message(filters.private & filters.media)
+async def media_handler(bot, message):
+    try:
+        # Check file size
+        if message.document:
+            file_size = message.document.file_size
+        elif message.photo:
+            file_size = message.photo.file_size
+        elif message.audio:
+            file_size = message.audio.file_size
+        elif message.video:
+            file_size = message.video.file_size
+        else:
+            await message.reply_text("❌ Unsupported file type!")
+            return
+
+        # Size limits (in bytes)
+        LIMITS = {
+            "photo": 5242880,    # 5MB
+            "document": 20971520, # 20MB
+            "audio": 20971520,   # 20MB
+            "video": 52428800    # 50MB
+        }
+
+        # Check file size limits
+        if message.photo and file_size > LIMITS["photo"]:
+            await message.reply_text("❌ Image file size should be less than 5MB!")
+            return
+        elif message.document and file_size > LIMITS["document"]:
+            await message.reply_text("❌ Document file size should be less than 20MB!")
+            return
+        elif message.audio and file_size > LIMITS["audio"]:
+            await message.reply_text("❌ Audio file size should be less than 20MB!")
+            return
+        elif message.video and file_size > LIMITS["video"]:
+            await message.reply_text("❌ Video file size should be less than 50MB!")
+            return
+
+        # Process different types of files
+        if message.photo or (message.document and message.document.mime_type.startswith('image')):
+            await process_image(bot, message)
+        elif message.document:
+            await process_document(bot, message)
+        elif message.audio:
+            await process_audio(bot, message)
+        elif message.video:
+            await process_video(bot, message)
+        else:
+            await message.reply_text("❌ Unsupported file type!")
+
+    except Exception as e:
+        await message.reply_text(f"❌ An error occurred: {str(e)}")
 
 Bot.run()
