@@ -2,14 +2,15 @@
 
 import os
 import time
+import asyncio
 from datetime import datetime
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message
 from pyrogram.errors import FloodWait
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from handlers.image_handler import process_image, convert_image, compress_image
-from handlers.document_handler import process_document, convert_pdf_to_docx, convert_docx_to_pdf, compress_pdf
+from handlers.document_handler import process_document, convert_pdf_to_docx, convert_docx_to_pdf, convert_pdf_to_images, compress_pdf
 from handlers.audio_handler import process_audio, convert_audio, compress_audio, extract_audio
 from handlers.video_handler import process_video, convert_to_gif, convert_video, extract_frames, compress_video
 
@@ -32,8 +33,55 @@ Bot = Client(
 
 # Initialize temp_files dictionary for storing temporary file paths
 Bot.temp_files = {}
+Bot.loading_messages = {}  # Store loading message references
 
 ADMIN_IDS = [int(id) for id in os.environ.get("ADMIN_IDS", "").split(",") if id]
+
+# Loading animation frames
+LOADING_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+async def show_loading_message(message: Message, text: str = "Processing your file") -> Message:
+    """Show a loading message with animation"""
+    loading_msg = await message.reply_text(f"{LOADING_FRAMES[0]} {text}...")
+    Bot.loading_messages[message.chat.id] = {
+        "message": loading_msg,
+        "frame_index": 0,
+        "is_active": True
+    }
+    return loading_msg
+
+async def update_loading_animation():
+    """Update all active loading animations"""
+    while True:
+        try:
+            for chat_id, data in Bot.loading_messages.copy().items():
+                if data["is_active"]:
+                    msg = data["message"]
+                    frame_index = data["frame_index"]
+                    new_frame = LOADING_FRAMES[(frame_index + 1) % len(LOADING_FRAMES)]
+                    current_text = msg.text.split("...")[-1]
+                    try:
+                        await msg.edit_text(f"{new_frame} {current_text}...")
+                        Bot.loading_messages[chat_id]["frame_index"] = (frame_index + 1) % len(LOADING_FRAMES)
+                    except:
+                        # Remove message if we can't edit it
+                        Bot.loading_messages.pop(chat_id, None)
+        except:
+            pass
+        await asyncio.sleep(0.5)
+
+async def stop_loading_message(chat_id: int, final_text: str = None):
+    """Stop the loading animation and optionally update the message"""
+    if chat_id in Bot.loading_messages:
+        try:
+            msg = Bot.loading_messages[chat_id]["message"]
+            if final_text:
+                await msg.edit_text(final_text)
+            else:
+                await msg.delete()
+        except:
+            pass
+        Bot.loading_messages.pop(chat_id, None)
 
 # Bot messages
 START_TEXT = """👋 Hello **{}**!
@@ -214,6 +262,9 @@ async def callback_query(bot, callback_query):
                 await callback_query.answer("❌ File not found! Please send the file again.", show_alert=True)
                 return
             
+            # Show loading message
+            loading_msg = await show_loading_message(callback_query.message, "Converting your file")
+            
             # Process the conversion based on callback data
             try:
                 if data == "convert_png":
@@ -288,10 +339,12 @@ async def callback_query(bot, callback_query):
                 # Remove the file path from temp_files
                 del bot.temp_files[chat_id]
                 
+                # Stop loading message with success
+                await stop_loading_message(chat_id, "✅ Conversion completed!")
                 await callback_query.answer("✅ Conversion completed!", show_alert=True)
                 
             except Exception as e:
-                await callback_query.message.reply_text(f"❌ Conversion error: {str(e)}")
+                await stop_loading_message(chat_id, f"❌ Conversion error: {str(e)}")
                 # Cleanup on error
                 if os.path.exists(file_path):
                     os.remove(file_path)
@@ -299,7 +352,7 @@ async def callback_query(bot, callback_query):
                     del bot.temp_files[chat_id]
                 
         except Exception as e:
-            await callback_query.message.reply_text(f"❌ Error: {str(e)}")
+            await stop_loading_message(chat_id, f"❌ Error: {str(e)}")
             # Cleanup on error
             if chat_id in bot.temp_files:
                 file_path = bot.temp_files[chat_id]
@@ -311,6 +364,9 @@ async def callback_query(bot, callback_query):
 @Bot.on_message(filters.private & filters.media)
 async def media_handler(bot, message):
     try:
+        # Show loading message
+        loading_msg = await show_loading_message(message)
+        
         # Check file size
         if message.document:
             file_size = message.document.file_size
@@ -321,7 +377,7 @@ async def media_handler(bot, message):
         elif message.video:
             file_size = message.video.file_size
         else:
-            await message.reply_text("❌ Unsupported file type!")
+            await stop_loading_message(message.chat.id, "❌ Unsupported file type!")
             return
 
         # Size limits (in bytes)
@@ -334,16 +390,16 @@ async def media_handler(bot, message):
 
         # Check file size limits
         if message.photo and file_size > LIMITS["photo"]:
-            await message.reply_text("❌ Image file size should be less than 5MB!")
+            await stop_loading_message(message.chat.id, "❌ Image file size should be less than 5MB!")
             return
         elif message.document and file_size > LIMITS["document"]:
-            await message.reply_text("❌ Document file size should be less than 20MB!")
+            await stop_loading_message(message.chat.id, "❌ Document file size should be less than 20MB!")
             return
         elif message.audio and file_size > LIMITS["audio"]:
-            await message.reply_text("❌ Audio file size should be less than 20MB!")
+            await stop_loading_message(message.chat.id, "❌ Audio file size should be less than 20MB!")
             return
         elif message.video and file_size > LIMITS["video"]:
-            await message.reply_text("❌ Video file size should be less than 2GB!")
+            await stop_loading_message(message.chat.id, "❌ Video file size should be less than 2GB!")
             return
 
         # Process different types of files
@@ -356,9 +412,20 @@ async def media_handler(bot, message):
         elif message.video:
             await process_video(bot, message)
         else:
-            await message.reply_text("❌ Unsupported file type!")
+            await stop_loading_message(message.chat.id, "❌ Unsupported file type!")
+            return
+            
+        # Stop loading message after showing format options
+        await stop_loading_message(message.chat.id)
 
     except Exception as e:
-        await message.reply_text(f"❌ An error occurred: {str(e)}")
+        await stop_loading_message(message.chat.id, f"❌ An error occurred: {str(e)}")
+        if 'file_path' in locals() and os.path.exists(file_path):
+            os.remove(file_path)
+
+# Start the loading animation task
+@Bot.on_start()
+async def start_loading_animation():
+    asyncio.create_task(update_loading_animation())
 
 Bot.run()
