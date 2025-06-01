@@ -8,10 +8,10 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQ
 from pyrogram.errors import FloodWait
 from pymongo import MongoClient
 from dotenv import load_dotenv
-from handlers.image_handler import process_image
-from handlers.document_handler import process_document
-from handlers.audio_handler import process_audio
-from handlers.video_handler import process_video
+from handlers.image_handler import process_image, convert_image, compress_image
+from handlers.document_handler import process_document, convert_pdf_to_docx, convert_docx_to_pdf, convert_pdf_to_images, compress_pdf
+from handlers.audio_handler import process_audio, convert_audio, compress_audio, extract_audio
+from handlers.video_handler import process_video, convert_to_gif, convert_video, extract_frames, compress_video
 
 load_dotenv()
 
@@ -162,6 +162,7 @@ async def stats_command(bot, message):
 @Bot.on_callback_query()
 async def callback_query(bot, callback_query):
     data = callback_query.data
+    chat_id = callback_query.message.chat.id
     
     if data == "help":
         await callback_query.message.edit_text(
@@ -200,6 +201,118 @@ async def callback_query(bot, callback_query):
             )
         else:
             await callback_query.answer("⚠️ Only admins can view statistics!", show_alert=True)
+    else:
+        # Handle file conversion callbacks
+        try:
+            if chat_id not in bot.temp_files:
+                await callback_query.answer("❌ No file found! Please send a file first.", show_alert=True)
+                return
+                
+            file_path = bot.temp_files[chat_id]
+            if not os.path.exists(file_path):
+                await callback_query.answer("❌ File not found! Please send the file again.", show_alert=True)
+                return
+            
+            # Process the conversion based on callback data
+            try:
+                if data == "convert_png":
+                    output_path = await convert_image(file_path, "PNG")
+                    await callback_query.message.reply_document(output_path)
+                elif data == "convert_jpg":
+                    output_path = await convert_image(file_path, "JPEG")
+                    await callback_query.message.reply_document(output_path)
+                elif data == "convert_webp":
+                    output_path = await convert_image(file_path, "WEBP")
+                    await callback_query.message.reply_document(output_path)
+                elif data == "convert_sticker":
+                    output_path = await convert_image(file_path, "WEBP")
+                    await callback_query.message.reply_sticker(output_path)
+                elif data == "convert_pdf":
+                    output_path = await convert_image(file_path, "PDF")
+                    await callback_query.message.reply_document(output_path)
+                elif data == "compress_image":
+                    output_path = await compress_image(file_path)
+                    await callback_query.message.reply_document(output_path)
+                elif data == "convert_docx":
+                    output_path = await convert_pdf_to_docx(file_path)
+                    await callback_query.message.reply_document(output_path)
+                elif data == "convert_images":
+                    image_paths = await convert_pdf_to_images(file_path)
+                    for img_path in image_paths:
+                        await callback_query.message.reply_document(img_path)
+                elif data == "compress_pdf":
+                    output_path = await compress_pdf(file_path)
+                    await callback_query.message.reply_document(output_path)
+                elif data == "convert_mp3":
+                    output_path = await convert_audio(file_path, "mp3")
+                    await callback_query.message.reply_audio(output_path)
+                elif data == "convert_wav":
+                    output_path = await convert_audio(file_path, "wav")
+                    await callback_query.message.reply_audio(output_path)
+                elif data == "convert_ogg":
+                    output_path = await convert_audio(file_path, "ogg")
+                    await callback_query.message.reply_audio(output_path)
+                elif data == "convert_m4a":
+                    output_path = await convert_audio(file_path, "m4a")
+                    await callback_query.message.reply_audio(output_path)
+                elif data == "compress_audio":
+                    output_path = await compress_audio(file_path)
+                    await callback_query.message.reply_audio(output_path)
+                elif data == "convert_gif":
+                    output_path = await convert_to_gif(file_path)
+                    await callback_query.message.reply_animation(output_path)
+                elif data == "convert_mp4":
+                    output_path = await convert_video(file_path, "mp4")
+                    await callback_query.message.reply_video(output_path)
+                elif data == "extract_audio":
+                    output_path = await extract_audio(file_path)
+                    await callback_query.message.reply_audio(output_path)
+                elif data == "extract_frames":
+                    frame_paths = await extract_frames(file_path)
+                    for frame_path in frame_paths:
+                        await callback_query.message.reply_document(frame_path)
+                elif data == "compress_video":
+                    output_path = await compress_video(file_path)
+                    await callback_query.message.reply_video(output_path)
+                
+                # Update conversion stats
+                update_stats(data)
+                
+                # Cleanup temporary files
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                if 'output_path' in locals() and os.path.exists(output_path):
+                    os.remove(output_path)
+                if 'image_paths' in locals():
+                    for path in image_paths:
+                        if os.path.exists(path):
+                            os.remove(path)
+                if 'frame_paths' in locals():
+                    for path in frame_paths:
+                        if os.path.exists(path):
+                            os.remove(path)
+                
+                # Remove the file path from temp_files
+                del bot.temp_files[chat_id]
+                
+                await callback_query.answer("✅ Conversion completed!", show_alert=True)
+                
+            except Exception as e:
+                await callback_query.message.reply_text(f"❌ Conversion error: {str(e)}")
+                # Cleanup on error
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                if chat_id in bot.temp_files:
+                    del bot.temp_files[chat_id]
+                
+        except Exception as e:
+            await callback_query.message.reply_text(f"❌ Error: {str(e)}")
+            # Cleanup on error
+            if chat_id in bot.temp_files:
+                file_path = bot.temp_files[chat_id]
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                del bot.temp_files[chat_id]
 
 # File handlers
 @Bot.on_message(filters.private & filters.media)
