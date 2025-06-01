@@ -1,4 +1,6 @@
+
 pyrogram
 tgcrypto
 ytthumb
 python-dotenv
+pymongo[srv]
