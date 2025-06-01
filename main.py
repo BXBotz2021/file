@@ -8,6 +8,7 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 from pyrogram.errors import FloodWait
 from pymongo import MongoClient
+import datetime
 
 load_dotenv()
 
@@ -27,23 +28,21 @@ Bot = Client(
 
 ADMIN_IDS = [int(id) for id in os.environ.get("ADMIN_IDS", "6974737899").split(",") if id]
 
-START_TEXT = """👋 Hello **{}**!
-Welcome to **YouTube Thumbnail Downloader Bot** 🎯
+START_TEXT = """👋 ʜᴇʏ  **{}**!
+ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛʜᴇ ʏᴏᴜᴛᴜʙᴇ ᴛʜᴜᴍʙɴᴀɪʟ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ ʙᴏᴛ 🚀
 
-I can help you download thumbnails from YouTube videos in various qualities!
+🎯 ɪ'ᴍ ʏᴏᴜʀ ɢᴏ-ᴛᴏ ʙᴏᴛ ғᴏʀ ɢʀᴀʙʙɪɴɢ ʜɪɢʜ-ǫᴜᴀʟɪᴛʏ ᴛʜᴜᴍʙɴᴀɪʟs ɪɴ sᴇᴄᴏɴᴅs.
 
-🔹 **Features:**
-• Download thumbnails in multiple qualities
-• Support for video links and IDs
-• Quick and easy to use
-• High-quality downloads
+🔍 ᴡʜᴀᴛ ɪ ᴄᴀɴ ᴅᴏ:
+• ᴅᴏᴡɴʟᴏᴀᴅ ᴛʜᴜᴍʙɴᴀɪʟs ɪɴ sᴅ, ᴍǫ, ʜǫ, ᴍᴀxʀᴇs
+• ᴀᴄᴄᴇᴘᴛs ʏᴏᴜᴛᴜʙᴇ ʟɪɴᴋs ᴏʀ ᴠɪᴅᴇᴏ ɪᴅs
+• ǫᴜɪᴄᴋ, sɪᴍᴘʟᴇ, ɴᴏ ᴄᴀᴘ
 
-📝 Send me any YouTube video link or ID to get started!
+🧠 ᴀᴠᴀɪʟᴀʙʟᴇ ǫᴜᴀʟɪᴛɪᴇs: sd, mq, hq, maxres
 
-💡 **Pro Tip:** You can specify quality like this:
-`videoID | quality` (e.g., `dQw4w9WgXcQ | hq`)
+ᴛʏᴘᴇ /help ɪғ ʏᴏᴜ ɴᴇᴇᴅ ᴀ ʙᴏᴏsᴛ 💬
 
-Use /help for more detailed instructions."""
+ʟᴇᴛ'ꜱ ɢᴇᴛ ᴛʜᴏsᴇ ᴛʜᴜᴍʙɴᴀɪʟs 🔥"""
 
 HELP_TEXT = """🔍 **How to Use:**
 
@@ -70,31 +69,40 @@ ABOUT_TEXT = """🤖 **Bot Information:**
 
 • **Name:** YouTube Thumbnail Downloader
 • **Version:** 2.0
-• **Developer:** @FayasNoushad
+• **Developer:** @BOT_RESURGE
 • **Language:** Python
 • **Framework:** Pyrogram
 
 📊 **Statistics:**
 • Users: {}
 • Downloads: {}
+"""
 
-🔗 **Useful Links:**
-• Support
-• Updates
-• Source Code"""
+STATS_TEXT = """📊 **ʙᴏᴛ sᴛᴀᴛɪsᴛɪᴄs:**
+
+👥 ᴛᴏᴛᴀʟ ᴜsᴇʀs: {}
+📥 ᴛᴏᴛᴀʟ ᴅᴏᴡɴʟᴏᴀᴅs: {}
+🔄 ʟᴀsᴛ ᴜᴘᴅᴀᴛᴇᴅ: {} UTC
+
+📈 **ᴛᴏᴅᴀʏ's sᴛᴀᴛs:**
+• ɴᴇᴡ ᴜsᴇʀs: {}
+• ᴅᴏᴡɴʟᴏᴀᴅs: {}"""
 
 # Enhanced buttons with emojis
 MAIN_BUTTONS = [
     [
-        InlineKeyboardButton("❓ Help", callback_data="help"),
-        InlineKeyboardButton("ℹ️ About", callback_data="about")
+        InlineKeyboardButton("❓ ʜᴇʟᴘ", callback_data="help"),
+        InlineKeyboardButton("ℹ️ ᴀʙᴏᴜᴛ", callback_data="about")
     ],
-    [InlineKeyboardButton("👨‍💻 Developer", url='https://telegram.me/bot_resurge')]
+    [
+        InlineKeyboardButton("📊 sᴛᴀᴛs", callback_data="stats"),
+        InlineKeyboardButton("👨‍💻 ᴅᴇᴠᴇʟᴏᴘᴇʀ", url='https://telegram.me/bot_resurge')
+    ]
 ]
 
 photo_buttons = InlineKeyboardMarkup([
-    [InlineKeyboardButton('🎨 Other Qualities', callback_data='qualities')],
-    [InlineKeyboardButton("👨‍💻 Developer", url='https://telegram.me/bot_resurge')]
+    [InlineKeyboardButton('🎨 ᴏᴛʜᴇʀ ǫᴜᴀʟɪᴛɪᴇs', callback_data='qualities')],
+    [InlineKeyboardButton("👨‍💻 ᴅᴇᴠᴇʟᴏᴘᴇʀ", url='https://telegram.me/bot_resurge')]
 ])
 
 # User tracking function
@@ -108,10 +116,54 @@ async def add_user(user_id, username):
 
 # Update stats
 def update_stats(type="downloads"):
+    # Update total downloads
     stats_collection.update_one(
         {"type": type},
         {"$inc": {"count": 1}},
         upsert=True
+    )
+    
+    # Update daily downloads
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    stats_collection.update_one(
+        {
+            "type": "daily_downloads",
+            "date": today
+        },
+        {"$inc": {"count": 1}},
+        upsert=True
+    )
+
+def get_daily_stats():
+    today = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Get today's new users
+    new_users = users_collection.count_documents({
+        "joined_date": {"$gte": today.timestamp()}
+    })
+    
+    # Get today's downloads
+    daily_downloads = stats_collection.find_one({
+        "type": "daily_downloads",
+        "date": today.strftime("%Y-%m-%d")
+    })
+    
+    return new_users, daily_downloads["count"] if daily_downloads else 0
+
+async def get_stats_text():
+    total_users = users_collection.count_documents({})
+    total_downloads = stats_collection.find_one({"type": "downloads"})
+    downloads = total_downloads["count"] if total_downloads else 0
+    current_time = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    
+    daily_users, daily_downloads = get_daily_stats()
+    
+    return STATS_TEXT.format(
+        total_users,
+        downloads,
+        current_time,
+        daily_users,
+        daily_downloads
     )
 
 @Bot.on_callback_query()
@@ -122,7 +174,16 @@ async def cb_data(_, message):
         await message.edit_message_text(
             HELP_TEXT,
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("◀️ Back", callback_data="start")
+                InlineKeyboardButton("◀️ ʙᴀᴄᴋ", callback_data="start")
+            ]])
+        )
+    
+    elif data == "stats":
+        stats_text = await get_stats_text()
+        await message.edit_message_text(
+            stats_text,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("◀️ ʙᴀᴄᴋ", callback_data="start")
             ]])
         )
     
@@ -134,7 +195,7 @@ async def cb_data(_, message):
         await message.edit_message_text(
             ABOUT_TEXT.format(total_users, downloads),
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("◀️ Back", callback_data="start")
+                InlineKeyboardButton("◀️ ʙᴀᴄᴋ", callback_data="start")
             ]])
         )
     
@@ -149,7 +210,7 @@ async def cb_data(_, message):
         for quality in ytthumb.qualities():
             buttons.append(
                 InlineKeyboardButton(
-                    text=ytthumb.qualities()[quality],
+                    text=ytthumb.qualities()[quality].upper().replace("QUALITY", "ǫᴜᴀʟɪᴛʏ").replace("STANDARD", "sᴛᴀɴᴅᴀʀᴅ").replace("MEDIUM", "ᴍᴇᴅɪᴜᴍ").replace("HIGH", "ʜɪɢʜ").replace("MAXIMUM RESOLUTION", "ᴍᴀxɪᴍᴜᴍ ʀᴇsᴏʟᴜᴛɪᴏɴ"),
                     callback_data=quality
                 )
             )
@@ -157,7 +218,7 @@ async def cb_data(_, message):
             InlineKeyboardMarkup([
                 [buttons[0], buttons[1]],
                 [buttons[2], buttons[3]],
-                [InlineKeyboardButton("◀️ Back", callback_data="back")]
+                [InlineKeyboardButton("◀️ ʙᴀᴄᴋ", callback_data="back")]
             ])
         )
     
@@ -271,5 +332,20 @@ async def send_thumbnail(bot, update):
             disable_web_page_preview=True,
             reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS)
         )
+
+# Add stats command handler
+@Bot.on_message(filters.private & filters.command("stats"))
+async def stats_command(_, message):
+    # Only allow admins to use this command
+    if message.from_user.id not in ADMIN_IDS:
+        await message.reply_text("⚠️ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ɪs ᴏɴʟʏ ғᴏʀ ᴀᴅᴍɪɴs.")
+        return
+    
+    stats_text = await get_stats_text()
+    await message.reply_text(
+        stats_text,
+        quote=True,
+        reply_markup=InlineKeyboardMarkup(MAIN_BUTTONS)
+    )
 
 Bot.run()
