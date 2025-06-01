@@ -6,7 +6,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 async def process_video(bot, message):
     try:
         # Download the video file
-        file_path = await message.video.download()
+        file_path = await message.download()
         
         # Create conversion options
         buttons = [
