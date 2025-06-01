@@ -4,7 +4,7 @@ import os
 import time
 import asyncio
 from datetime import datetime
-from pyrogram import Client, filters
+from pyrogram import Client, filters, utils
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message
 from pyrogram.errors import FloodWait
 from pymongo import MongoClient
@@ -39,6 +39,10 @@ ADMIN_IDS = [int(id) for id in os.environ.get("ADMIN_IDS", "").split(",") if id]
 
 # Loading animation frames
 LOADING_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+# Progress bar settings
+PROGRESS_BAR_LENGTH = 20
+PROGRESS_CHARS = ["▱", "▰"]
 
 async def show_loading_message(message: Message, text: str = "Processing your file") -> Message:
     """Show a loading message with animation"""
@@ -82,6 +86,34 @@ async def stop_loading_message(chat_id: int, final_text: str = None):
         except:
             pass
         Bot.loading_messages.pop(chat_id, None)
+
+async def progress_bar(current, total):
+    """Create a progress bar string"""
+    percentage = current * 100 / total
+    progress = int(percentage / 100 * PROGRESS_BAR_LENGTH)
+    bar = PROGRESS_CHARS[1] * progress + PROGRESS_CHARS[0] * (PROGRESS_BAR_LENGTH - progress)
+    percentage_str = f"{percentage:.1f}%"
+    return f"[{bar}] {percentage_str}"
+
+async def progress_callback(current, total, message, operation):
+    """Callback for tracking file operations progress"""
+    try:
+        if total:
+            now = time.time()
+            # Update progress every 0.5 seconds
+            if message.temp.get('last_update', 0) + 0.5 < now:
+                bar = await progress_bar(current, total)
+                size_text = f"{utils.humanbytes(current)} / {utils.humanbytes(total)}"
+                
+                if operation == "download":
+                    text = f"📥 **Downloading Video...**\n{bar}\n{size_text}"
+                else:  # upload
+                    text = f"📤 **Uploading Video...**\n{bar}\n{size_text}"
+                
+                await message.edit_text(text)
+                message.temp['last_update'] = now
+    except Exception as e:
+        pass
 
 # Bot messages
 START_TEXT = """👋 Hello **{}**!
@@ -264,9 +296,11 @@ async def callback_query(bot, callback_query):
             
             # Show loading message
             loading_msg = await show_loading_message(callback_query.message, "Converting your file")
+            loading_msg.temp = {}  # Store last update time
             
             # Process the conversion based on callback data
             try:
+                output_path = None
                 if data == "convert_png":
                     output_path = await convert_image(file_path, "PNG")
                     await callback_query.message.reply_document(output_path)
@@ -308,20 +342,36 @@ async def callback_query(bot, callback_query):
                     await callback_query.message.reply_audio(output_path)
                 elif data == "convert_gif":
                     output_path = await convert_to_gif(file_path)
-                    await callback_query.message.reply_animation(output_path)
+                    await callback_query.message.reply_animation(
+                        output_path,
+                        progress=progress_callback,
+                        progress_args=(loading_msg, "upload",)
+                    )
                 elif data == "convert_mp4":
                     output_path = await convert_video(file_path, "mp4")
-                    await callback_query.message.reply_video(output_path)
+                    await callback_query.message.reply_video(
+                        output_path,
+                        progress=progress_callback,
+                        progress_args=(loading_msg, "upload",)
+                    )
                 elif data == "extract_audio":
                     output_path = await extract_audio(file_path)
                     await callback_query.message.reply_audio(output_path)
                 elif data == "extract_frames":
                     frame_paths = await extract_frames(file_path)
                     for frame_path in frame_paths:
-                        await callback_query.message.reply_document(frame_path)
+                        await callback_query.message.reply_document(
+                            frame_path,
+                            progress=progress_callback,
+                            progress_args=(loading_msg, "upload",)
+                        )
                 elif data == "compress_video":
                     output_path = await compress_video(file_path)
-                    await callback_query.message.reply_video(output_path)
+                    await callback_query.message.reply_video(
+                        output_path,
+                        progress=progress_callback,
+                        progress_args=(loading_msg, "upload",)
+                    )
                 
                 # Update conversion stats
                 update_stats(data)
@@ -329,7 +379,7 @@ async def callback_query(bot, callback_query):
                 # Cleanup temporary files
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                if 'output_path' in locals() and os.path.exists(output_path):
+                if output_path and os.path.exists(output_path):
                     os.remove(output_path)
                 if 'frame_paths' in locals():
                     for path in frame_paths:
@@ -364,7 +414,7 @@ async def callback_query(bot, callback_query):
 @Bot.on_message(filters.private & filters.media)
 async def media_handler(bot, message):
     try:
-        # Show loading message
+        # Show initial loading message
         loading_msg = await show_loading_message(message)
         
         # Check file size
@@ -410,7 +460,32 @@ async def media_handler(bot, message):
         elif message.audio:
             await process_audio(bot, message)
         elif message.video:
-            await process_video(bot, message)
+            # Initialize progress message
+            progress_msg = await message.reply_text("🎥 Preparing to download video...")
+            progress_msg.temp = {}  # Store last update time
+            
+            try:
+                # Download video with progress
+                file_path = await message.download(
+                    progress=progress_callback,
+                    progress_args=(progress_msg, "download",)
+                )
+                
+                # Show download completion message
+                await progress_msg.edit_text("✅ Video downloaded successfully!")
+                await asyncio.sleep(1)  # Brief pause
+                
+                # Process video and show options
+                await process_video(bot, message)
+                
+                # Store the file path
+                bot.temp_files[message.chat.id] = file_path
+                
+            except Exception as e:
+                await progress_msg.edit_text(f"❌ Error processing video: {str(e)}")
+                if 'file_path' in locals() and os.path.exists(file_path):
+                    os.remove(file_path)
+                return
         else:
             await stop_loading_message(message.chat.id, "❌ Unsupported file type!")
             return
