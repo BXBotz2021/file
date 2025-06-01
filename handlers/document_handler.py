@@ -1,7 +1,6 @@
 import os
 from pdf2docx import Converter
 from docx2pdf import convert
-from pdf2image import convert_from_path
 from PyPDF2 import PdfReader, PdfWriter
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -16,9 +15,6 @@ async def process_document(bot, message):
             buttons = [
                 [
                     InlineKeyboardButton("DOCX ➡️", callback_data="convert_docx"),
-                    InlineKeyboardButton("Images ➡️", callback_data="convert_images")
-                ],
-                [
                     InlineKeyboardButton("🗜️ Compress", callback_data="compress_pdf")
                 ]
             ]
@@ -72,25 +68,6 @@ async def convert_docx_to_pdf(file_path):
         return output_path
     except Exception as e:
         raise Exception(f"Error converting DOCX to PDF: {str(e)}")
-
-async def convert_pdf_to_images(file_path):
-    try:
-        # Create output directory
-        output_dir = f"{os.path.splitext(file_path)[0]}_images"
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Convert PDF to images
-        images = convert_from_path(file_path)
-        image_paths = []
-        
-        for i, image in enumerate(images):
-            output_path = os.path.join(output_dir, f"page_{i+1}.jpg")
-            image.save(output_path, 'JPEG')
-            image_paths.append(output_path)
-        
-        return image_paths
-    except Exception as e:
-        raise Exception(f"Error converting PDF to images: {str(e)}")
 
 async def compress_pdf(file_path):
     try:
