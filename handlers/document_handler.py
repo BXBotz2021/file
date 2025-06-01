@@ -8,7 +8,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 async def process_document(bot, message):
     try:
         # Download the document file
-        file_path = await message.document.download()
+        file_path = await message.download()
         file_ext = os.path.splitext(file_path)[1].lower()
         
         # Create conversion options based on file type
