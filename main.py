@@ -241,262 +241,157 @@ async def stats_command(bot, message):
 
 # Callback query handler
 @Bot.on_callback_query()
-async def callback_query(bot, callback_query):
-    data = callback_query.data
-    chat_id = callback_query.message.chat.id
-    
-    if data == "help":
-        await callback_query.message.edit_text(
-            HELP_TEXT,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("◀️ Back", callback_data="start")]
-            ])
-        )
-    elif data == "start":
-        await callback_query.message.edit_text(
-            START_TEXT.format(callback_query.from_user.mention),
-            reply_markup=InlineKeyboardMarkup(START_BUTTONS)
-        )
-    elif data == "stats":
-        if callback_query.from_user.id in ADMIN_IDS:
-            total_users = users_collection.count_documents({})
-            total_conversions = sum(
-                stat["count"] for stat in stats_collection.find()
-            )
+async def callback_query(bot, callback_query: CallbackQuery):
+    try:
+        # Get the stored message and file type
+        chat_id = callback_query.message.chat.id
+        if chat_id not in Bot.temp_files:
+            await callback_query.answer("❌ Please send your file again.", show_alert=True)
+            return
+        
+        stored_data = Bot.temp_files[chat_id]
+        original_message = stored_data["original_message"]
+        file_type = stored_data["file_type"]
+        
+        # Show processing message
+        await callback_query.message.edit_text("🔄 Processing your request...")
+        
+        # Handle different conversion types
+        if callback_query.data.startswith("convert_"):
+            format_type = callback_query.data.replace("convert_", "")
             
-            stats_text = f"""📊 **Bot Statistics**
-
-👥 Total Users: {total_users}
-🔄 Total Conversions: {total_conversions}
-
-**Conversion Types:**"""
+            if file_type == "photo":
+                result = await convert_image(bot, original_message, format_type)
+            elif file_type == "audio":
+                result = await convert_audio(bot, original_message, format_type)
+            elif file_type == "video" and format_type == "gif":
+                result = await convert_to_gif(bot, original_message)
             
-            for stat in stats_collection.find():
-                stats_text += f"\n• {stat['type']}: {stat['count']}"
+        elif callback_query.data == "pdf_to_docx":
+            result = await convert_pdf_to_docx(bot, original_message)
             
-            await callback_query.message.edit_text(
-                stats_text,
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("◀️ Back", callback_data="start")]
-                ])
-            )
+        elif callback_query.data == "docx_to_pdf":
+            result = await convert_docx_to_pdf(bot, original_message)
+            
+        elif callback_query.data.startswith("compress_"):
+            media_type = callback_query.data.replace("compress_", "")
+            
+            if media_type == "image":
+                result = await compress_image(bot, original_message)
+            elif media_type == "pdf":
+                result = await compress_pdf(bot, original_message)
+            elif media_type == "audio":
+                result = await compress_audio(bot, original_message)
+            elif media_type == "video":
+                result = await compress_video(bot, original_message)
+                
+        elif callback_query.data == "extract_frames":
+            result = await extract_frames(bot, original_message)
+            
+        elif callback_query.data == "extract_audio" or callback_query.data == "extract_audio_from_video":
+            result = await extract_audio(bot, original_message)
+            
         else:
-            await callback_query.answer("⚠️ Only admins can view statistics!", show_alert=True)
-    else:
-        # Handle file conversion callbacks
-        try:
-            if chat_id not in bot.temp_files:
-                await callback_query.answer("❌ No file found! Please send a file first.", show_alert=True)
-                return
-                
-            file_path = bot.temp_files[chat_id]
-            if not os.path.exists(file_path):
-                await callback_query.answer("❌ File not found! Please send the file again.", show_alert=True)
-                return
-            
-            # Show loading message
-            loading_msg = await show_loading_message(callback_query.message, "Converting your file")
-            loading_msg.temp = {}  # Store last update time
-            
-            # Process the conversion based on callback data
-            try:
-                output_path = None
-                if data == "convert_png":
-                    output_path = await convert_image(file_path, "PNG")
-                    await callback_query.message.reply_document(output_path)
-                elif data == "convert_jpg":
-                    output_path = await convert_image(file_path, "JPEG")
-                    await callback_query.message.reply_document(output_path)
-                elif data == "convert_webp":
-                    output_path = await convert_image(file_path, "WEBP")
-                    await callback_query.message.reply_document(output_path)
-                elif data == "convert_sticker":
-                    output_path = await convert_image(file_path, "WEBP")
-                    await callback_query.message.reply_sticker(output_path)
-                elif data == "convert_pdf":
-                    output_path = await convert_image(file_path, "PDF")
-                    await callback_query.message.reply_document(output_path)
-                elif data == "compress_image":
-                    output_path = await compress_image(file_path)
-                    await callback_query.message.reply_document(output_path)
-                elif data == "convert_docx":
-                    output_path = await convert_pdf_to_docx(file_path)
-                    await callback_query.message.reply_document(output_path)
-                elif data == "compress_pdf":
-                    output_path = await compress_pdf(file_path)
-                    await callback_query.message.reply_document(output_path)
-                elif data == "convert_mp3":
-                    output_path = await convert_audio(file_path, "mp3")
-                    await callback_query.message.reply_audio(output_path)
-                elif data == "convert_wav":
-                    output_path = await convert_audio(file_path, "wav")
-                    await callback_query.message.reply_audio(output_path)
-                elif data == "convert_ogg":
-                    output_path = await convert_audio(file_path, "ogg")
-                    await callback_query.message.reply_audio(output_path)
-                elif data == "convert_m4a":
-                    output_path = await convert_audio(file_path, "m4a")
-                    await callback_query.message.reply_audio(output_path)
-                elif data == "compress_audio":
-                    output_path = await compress_audio(file_path)
-                    await callback_query.message.reply_audio(output_path)
-                elif data == "convert_gif":
-                    output_path = await convert_to_gif(file_path)
-                    await callback_query.message.reply_animation(
-                        output_path,
-                        progress=progress_callback,
-                        progress_args=(loading_msg, "upload",)
-                    )
-                elif data == "convert_mp4":
-                    output_path = await convert_video(file_path, "mp4")
-                    await callback_query.message.reply_video(
-                        output_path,
-                        progress=progress_callback,
-                        progress_args=(loading_msg, "upload",)
-                    )
-                elif data == "extract_audio":
-                    output_path = await extract_audio(file_path)
-                    await callback_query.message.reply_audio(output_path)
-                elif data == "extract_frames":
-                    frame_paths = await extract_frames(file_path)
-                    for frame_path in frame_paths:
-                        await callback_query.message.reply_document(
-                            frame_path,
-                            progress=progress_callback,
-                            progress_args=(loading_msg, "upload",)
-                        )
-                elif data == "compress_video":
-                    output_path = await compress_video(file_path)
-                    await callback_query.message.reply_video(
-                        output_path,
-                        progress=progress_callback,
-                        progress_args=(loading_msg, "upload",)
-                    )
-                
-                # Update conversion stats
-                update_stats(data)
-                
-                # Cleanup temporary files
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                if output_path and os.path.exists(output_path):
-                    os.remove(output_path)
-                if 'frame_paths' in locals():
-                    for path in frame_paths:
-                        if os.path.exists(path):
-                            os.remove(path)
-                
-                # Remove the file path from temp_files
-                del bot.temp_files[chat_id]
-                
-                # Stop loading message with success
-                await stop_loading_message(chat_id, "✅ Conversion completed!")
-                await callback_query.answer("✅ Conversion completed!", show_alert=True)
-                
-            except Exception as e:
-                await stop_loading_message(chat_id, f"❌ Conversion error: {str(e)}")
-                # Cleanup on error
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                if chat_id in bot.temp_files:
-                    del bot.temp_files[chat_id]
-                
-        except Exception as e:
-            await stop_loading_message(chat_id, f"❌ Error: {str(e)}")
-            # Cleanup on error
-            if chat_id in bot.temp_files:
-                file_path = bot.temp_files[chat_id]
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                del bot.temp_files[chat_id]
+            await callback_query.message.edit_text("❌ Invalid conversion option.")
+            return
+        
+        # Clean up stored data
+        Bot.temp_files.pop(chat_id, None)
+        
+        # Update user's conversion count
+        users_collection.update_one(
+            {"user_id": callback_query.from_user.id},
+            {"$inc": {"files_converted": 1}}
+        )
+        
+        # Update conversion stats
+        update_stats(callback_query.data)
+        
+    except Exception as e:
+        await callback_query.message.edit_text(f"❌ An error occurred: {str(e)}")
+        print(f"Error in callback_query: {str(e)}")
 
 # File handlers
 @Bot.on_message(filters.private & filters.media)
 async def media_handler(bot, message):
     try:
-        # Show initial loading message
-        loading_msg = await show_loading_message(message)
+        # Add user to database
+        await add_user(message.from_user.id, message.from_user.username)
         
-        # Check file size
-        if message.document:
-            file_size = message.document.file_size
-        elif message.photo:
-            file_size = message.photo.file_size
-        elif message.audio:
-            file_size = message.audio.file_size
-        elif message.video:
-            file_size = message.video.file_size
-        else:
-            await stop_loading_message(message.chat.id, "❌ Unsupported file type!")
-            return
-
-        # Size limits (in bytes)
-        LIMITS = {
-            "photo": 5242880,    # 5MB
-            "document": 20971520, # 20MB
-            "audio": 20971520,   # 20MB
-            "video": 2147483648  # 2GB
-        }
-
-        # Check file size limits
-        if message.photo and file_size > LIMITS["photo"]:
-            await stop_loading_message(message.chat.id, "❌ Image file size should be less than 5MB!")
-            return
-        elif message.document and file_size > LIMITS["document"]:
-            await stop_loading_message(message.chat.id, "❌ Document file size should be less than 20MB!")
-            return
-        elif message.audio and file_size > LIMITS["audio"]:
-            await stop_loading_message(message.chat.id, "❌ Audio file size should be less than 20MB!")
-            return
-        elif message.video and file_size > LIMITS["video"]:
-            await stop_loading_message(message.chat.id, "❌ Video file size should be less than 2GB!")
-            return
-
-        # Process different types of files
-        if message.photo or (message.document and message.document.mime_type.startswith('image')):
-            await process_image(bot, message)
+        # Show initial loading message
+        loading_msg = await show_loading_message(message, "Analyzing your file")
+        
+        # Determine file type and show appropriate conversion options
+        if message.photo:
+            markup = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("PNG ➡️ JPG", callback_data="convert_jpg"),
+                    InlineKeyboardButton("JPG ➡️ PNG", callback_data="convert_png")
+                ],
+                [
+                    InlineKeyboardButton("Image ➡️ Sticker", callback_data="convert_sticker"),
+                    InlineKeyboardButton("Image ➡️ PDF", callback_data="convert_pdf")
+                ],
+                [InlineKeyboardButton("Compress Image", callback_data="compress_image")]
+            ])
+            await process_image(bot, message, loading_msg)
+            
         elif message.document:
-            await process_document(bot, message)
-        elif message.audio:
-            await process_audio(bot, message)
+            file_name = message.document.file_name.lower()
+            if file_name.endswith(('.pdf', '.docx', '.doc')):
+                markup = InlineKeyboardMarkup([
+                    [
+                        InlineKeyboardButton("PDF ➡️ Word", callback_data="pdf_to_docx"),
+                        InlineKeyboardButton("Word ➡️ PDF", callback_data="docx_to_pdf")
+                    ],
+                    [InlineKeyboardButton("Compress PDF", callback_data="compress_pdf")]
+                ])
+                await process_document(bot, message, loading_msg)
+                
+        elif message.audio or message.voice:
+            markup = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("MP3 ➡️ WAV", callback_data="convert_wav"),
+                    InlineKeyboardButton("WAV ➡️ MP3", callback_data="convert_mp3")
+                ],
+                [
+                    InlineKeyboardButton("Extract Audio", callback_data="extract_audio"),
+                    InlineKeyboardButton("Compress Audio", callback_data="compress_audio")
+                ]
+            ])
+            await process_audio(bot, message, loading_msg)
+            
         elif message.video:
-            # Initialize progress message
-            progress_msg = await message.reply_text("🎥 Preparing to download video...")
-            progress_msg.temp = {}  # Store last update time
-            
-            try:
-                # Download video with progress
-                file_path = await message.download(
-                    progress=progress_callback,
-                    progress_args=(progress_msg, "download",)
-                )
-                
-                # Show download completion message
-                await progress_msg.edit_text("✅ Video downloaded successfully!")
-                await asyncio.sleep(1)  # Brief pause
-                
-                # Process video and show options
-                await process_video(bot, message)
-                
-                # Store the file path
-                bot.temp_files[message.chat.id] = file_path
-                
-            except Exception as e:
-                await progress_msg.edit_text(f"❌ Error processing video: {str(e)}")
-                if 'file_path' in locals() and os.path.exists(file_path):
-                    os.remove(file_path)
-                return
+            markup = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("Video ➡️ GIF", callback_data="convert_gif"),
+                    InlineKeyboardButton("Compress Video", callback_data="compress_video")
+                ],
+                [
+                    InlineKeyboardButton("Extract Frames", callback_data="extract_frames"),
+                    InlineKeyboardButton("Extract Audio", callback_data="extract_audio_from_video")
+                ]
+            ])
+            await process_video(bot, message, loading_msg)
+        
         else:
-            await stop_loading_message(message.chat.id, "❌ Unsupported file type!")
+            await stop_loading_message(message.chat.id, "❌ Unsupported file type. Please send an image, document, audio, or video file.")
             return
-            
-        # Stop loading message after showing format options
-        await stop_loading_message(message.chat.id)
-
+        
+        # Store the original message reference for later use
+        Bot.temp_files[message.chat.id] = {
+            "original_message": message,
+            "file_type": "photo" if message.photo else "document" if message.document else "audio" if message.audio else "video"
+        }
+        
+        await loading_msg.edit_text(
+            "Please select your desired conversion option:",
+            reply_markup=markup
+        )
+        
     except Exception as e:
         await stop_loading_message(message.chat.id, f"❌ An error occurred: {str(e)}")
-        if 'file_path' in locals() and os.path.exists(file_path):
-            os.remove(file_path)
+        print(f"Error in media_handler: {str(e)}")
 
 # Start the loading animation task
 @Bot.on_start()
